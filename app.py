@@ -264,24 +264,42 @@ def serve_profile_image(filename):
     _, _, user_profile, _ = get_user_folders(user_id)
     return send_from_directory(user_profile, filename)
 
-@app.route('/config', methods=['POST'])
+@app.route('/update_config', methods=['POST'])
 def update_config():
     user_id = get_user_id()
+    _, _, user_profile, _ = get_user_folders(user_id)
     config = UserConfig.load_or_create(user_id)
     
-    data = request.get_json()
+    # 處理基本設置
+    config.idol_name = request.form.get('idol_name', config.idol_name)
+    config.theme_color = request.form.get('theme_color', config.theme_color)
+    config.secondary_color = request.form.get('secondary_color', config.secondary_color)
+    config.button_color = request.form.get('button_color', config.button_color)
     
-    if 'idol_name' in data:
-        config.idol_name = data['idol_name']
-    if 'theme_color' in data:
-        config.theme_color = data['theme_color']
-    if 'secondary_color' in data:
-        config.secondary_color = data['secondary_color']
-    if 'button_color' in data:
-        config.button_color = data['button_color']
+    # 處理頭像上傳
+    if 'profile_image' in request.files:
+        file = request.files['profile_image']
+        if file and file.filename != '' and allowed_file(file.filename, {'png', 'jpg', 'jpeg', 'gif'}):
+            # 刪除舊的頭像文件
+            for old_file in os.listdir(user_profile):
+                old_path = os.path.join(user_profile, old_file)
+                if os.path.isfile(old_path):
+                    os.remove(old_path)
+            
+            # 保存新頭像
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(user_profile, filename)
+            file.save(file_path)
+            config.profile_image = filename
     
+    # 保存設置
     config.save(user_id)
-    return jsonify({'message': '配置已更新'}), 200
+    
+    return jsonify({
+        'success': True,
+        'message': '設置已更新',
+        'profile_image': f'/profile_image/{config.profile_image}' if config.profile_image else None
+    }), 200
 
 @app.errorhandler(404)
 def not_found_error(error):
