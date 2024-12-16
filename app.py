@@ -397,11 +397,9 @@ def request_entity_too_large(error):
     return jsonify({'error': '上傳的檔案太大'}), 413
 
 if __name__ == '__main__':
-    # 本地運行時使用
-    app.run(host='0.0.0.0', port=5001, debug=True)
-else:
-    # Render 環境
-    port = int(os.environ.get("PORT", 10000))
     # 確保所有必要的目錄存在
     for directory in [UPLOAD_FOLDER, AUDIO_FOLDER, PROFILE_FOLDER, CONFIG_FOLDER]:
         os.makedirs(directory, exist_ok=True)
+    # 使用環境變量中的端口，如果沒有則使用5001
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host='0.0.0.0', port=port)
