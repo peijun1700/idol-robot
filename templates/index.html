@@ -234,6 +234,26 @@
         .file-label:hover {
             background-color: #45a049;
         }
+        .command-list {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .command-item {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .command-name {
+            font-weight: bold;
+            color: var(--theme-color);
+        }
     </style>
 </head>
 <body>
@@ -286,38 +306,19 @@
             
             <h1 id="idolNameDisplay">{{ idol_name }} 聊天機器人</h1>
             
-            <div class="tabs">
-                <button class="tab active" onclick="showTab('chat')">聊天</button>
-                <button class="tab" onclick="showTab('upload')">上傳</button>
-            </div>
-
-            <div id="chatTab">
-                <div class="controls">
-                    <button id="startButton" onclick="startChat()">開始聊天</button>
-                    <button id="stopButton" disabled onclick="stopChat()">結束聊天</button>
-                </div>
-                
-                <div id="chatStatus"></div>
-                <div id="status"></div>
-
-                <div class="hint">
-                    試試說：「你好」、「我愛你」、「早安寶寶」等等...
-                </div>
-                
-                <div class="responses" id="responsesList">
-                    <h3>可以跟 {{ idol_name }} 說：</h3>
-                    <div id="responseList"></div>
-                </div>
-            </div>
-
-            <div id="uploadTab" style="display: none;">
-                <div class="upload-section">
-                    <h3>上傳新的回應</h3>
-                    <div class="upload-form">
-                        <input type="text" id="commandInput" placeholder="輸入指令名稱 (例如：你好)" required>
-                        <input type="file" id="audioFileInput" accept="audio/*" onchange="updateFileName()">
-                        <label for="audioFileInput" class="file-label" id="fileLabel">選擇音檔</label>
-                        <button onclick="uploadAudio()">上傳</button>
+            <div class="content">
+                <div class="tab-content" id="chatTab">
+                    <div class="chat-container">
+                        <div class="status-container" id="statusContainer">
+                            <div id="statusText">準備就緒</div>
+                            <div id="commandList" class="command-list"></div>
+                        </div>
+                        <button id="startButton" onclick="startChat()" class="control-button">
+                            開始對話
+                        </button>
+                        <button id="stopButton" onclick="stopChat()" class="control-button" style="display: none;">
+                            停止對話
+                        </button>
                     </div>
                 </div>
             </div>
@@ -326,88 +327,107 @@
 
     <script>
         let recognition;
-        let isRecording = false;
-        const userId = '{{ user_id }}';
-
-        if ('webkitSpeechRecognition' in window) {
-            recognition = new webkitSpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = false;
-            recognition.lang = 'zh-TW';
-
-            recognition.onstart = function() {
-                isRecording = true;
-                document.getElementById('chatStatus').innerHTML = '{{ idol_name }} 寶寶正在聆聽...';
-                document.getElementById('startButton').disabled = true;
-                document.getElementById('stopButton').disabled = false;
-                document.getElementById('responsesList').style.display = 'block';
-                displayResponses();
-            };
-
-            recognition.onend = function() {
-                if (isRecording) {
-                    recognition.start();
-                }
-            };
-
-            recognition.onresult = function(event) {
-                const command = event.results[event.results.length - 1][0].transcript;
-                handleCommand(command);
-            };
-
-            recognition.onerror = function(event) {
-                console.error('Speech recognition error:', event.error);
-                updateStatus('語音辨識發生錯誤: ' + event.error, 'error');
-            };
+        let isListening = false;
+        
+        function updateCommandList() {
+            fetch('/get_commands')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const commandList = document.getElementById('commandList');
+                        commandList.innerHTML = '<h3>可用指令：</h3>';
+                        data.commands.forEach(command => {
+                            const div = document.createElement('div');
+                            div.className = 'command-item';
+                            div.innerHTML = `
+                                <span class="command-name">${command}</span>
+                                <button onclick="playAudio('${command}')" class="play-button">
+                                    播放
+                                </button>
+                            `;
+                            commandList.appendChild(div);
+                        });
+                    }
+                })
+                .catch(error => console.error('Error:', error));
         }
 
         function startChat() {
-            if (recognition) {
-                isRecording = true;
+            if (!isListening) {
+                recognition = new webkitSpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'zh-TW';
+
+                recognition.onstart = function() {
+                    isListening = true;
+                    document.getElementById('startButton').style.display = 'none';
+                    document.getElementById('stopButton').style.display = 'block';
+                    updateStatus('正在聆聽...', 'listening');
+                    updateCommandList(); // 更新指令列表
+                };
+
+                recognition.onend = function() {
+                    isListening = false;
+                    document.getElementById('startButton').style.display = 'block';
+                    document.getElementById('stopButton').style.display = 'none';
+                    updateStatus('已停止聆聽', 'stopped');
+                };
+
+                recognition.onresult = function(event) {
+                    const last = event.results.length - 1;
+                    const command = event.results[last][0].transcript.trim().toLowerCase();
+                    
+                    // 更新狀態顯示
+                    updateStatus(`收到指令: ${command}`, 'processing');
+                    
+                    // 發送到後端進行處理
+                    fetch('/recognize', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ command: command })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (data.action === 'play') {
+                                updateStatus(`播放: ${data.command}`, 'success');
+                                playAudio(data.file_name);
+                            } else if (data.action === 'stop') {
+                                stopChat();
+                            }
+                        } else {
+                            updateStatus(data.error, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        updateStatus('處理指令時發生錯誤', 'error');
+                    });
+                };
+
                 recognition.start();
-            } else {
-                updateStatus('你的瀏覽器不支持語音識別功能', 'error');
             }
         }
 
         function stopChat() {
-            isRecording = false;
             recognition.stop();
-            document.getElementById('chatStatus').innerHTML = '';
-            document.getElementById('startButton').disabled = false;
-            document.getElementById('stopButton').disabled = true;
-            document.getElementById('responsesList').style.display = 'none';
+            isListening = false;
+            document.getElementById('startButton').style.display = 'block';
+            document.getElementById('stopButton').style.display = 'none';
+            updateStatus('已停止聆聽', 'stopped');
         }
 
-        function handleCommand(command) {
-            console.log('Recognized command:', command);
-            fetch('/recognize', {
-                method: 'POST',
-                body: JSON.stringify({ command: command, user_id: userId }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    if (result.action === 'play') {
-                        playAudio(result.file_name);
-                    } else if (result.action === 'stop') {
-                        stopChat();
-                    }
-                } else {
-                    updateStatus(result.error, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                updateStatus('處理指令時發生錯誤', 'error');
-            });
+        function updateStatus(message, type) {
+            const status = document.getElementById('statusText');
+            status.textContent = message;
+            status.className = type;
         }
 
         function playAudio(command) {
-            fetch(`/play/${command}?user_id=${userId}`)
+            fetch(`/play/${command}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -421,118 +441,6 @@
                     console.error('Error:', error);
                     updateStatus('播放音檔時發生錯誤', 'error');
                 });
-        }
-
-        function updateStatus(message, type) {
-            const status = document.getElementById('status');
-            status.textContent = message;
-            status.className = type;
-        }
-
-        function showTab(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            
-            if (tabName === 'chat') {
-                document.getElementById('chatTab').style.display = 'block';
-                document.getElementById('uploadTab').style.display = 'none';
-                document.querySelector('.tab:first-child').classList.add('active');
-            } else {
-                document.getElementById('chatTab').style.display = 'none';
-                document.getElementById('uploadTab').style.display = 'block';
-                document.querySelector('.tab:last-child').classList.add('active');
-                displayResponses();
-            }
-        }
-
-        function uploadAudio() {
-            const commandInput = document.getElementById('commandInput');
-            const fileInput = document.getElementById('audioFileInput');
-            const command = commandInput.value.trim();
-            const file = fileInput.files[0];
-
-            if (!command) {
-                updateStatus('請輸入指令名稱', 'error');
-                return;
-            }
-
-            if (!file) {
-                updateStatus('請選擇音檔', 'error');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('command', command);
-            formData.append('audio', file);
-            formData.append('user_id', userId);
-
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(result => {
-                if (result.success) {
-                    updateStatus(result.message, 'success');
-                    commandInput.value = '';
-                    fileInput.value = '';
-                    document.getElementById('fileLabel').textContent = '選擇音檔';
-                } else {
-                    updateStatus(result.error, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                updateStatus('上傳失敗', 'error');
-            });
-        }
-
-        function updateFileName() {
-            const fileInput = document.getElementById('audioFileInput');
-            const fileLabel = document.getElementById('fileLabel');
-            if (fileInput.files.length > 0) {
-                fileLabel.textContent = fileInput.files[0].name;
-            } else {
-                fileLabel.textContent = '選擇音檔';
-            }
-        }
-
-        function displayResponses() {
-            const responseList = document.getElementById('responseList');
-            fetch('/get_commands?user_id=' + userId)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        responseList.innerHTML = '';
-                        data.commands.forEach(command => {
-                            const div = document.createElement('div');
-                            div.className = 'response-item';
-                            div.innerHTML = `
-                                <span>${command}</span>
-                                <div class="controls">
-                                    <button onclick="playAudio('${command}')" style="font-size: 0.8em; padding: 5px 10px;">
-                                        播放
-                                    </button>
-                                </div>
-                            `;
-                            responseList.appendChild(div);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-        }
-
-        function updateColors() {
-            const themeColor = document.getElementById('themeColor').value;
-            const secondaryColor = document.getElementById('secondaryColor').value;
-            const buttonColor = document.getElementById('buttonColor').value;
-            
-            document.documentElement.style.setProperty('--theme-color', themeColor);
-            document.documentElement.style.setProperty('--secondary-color', secondaryColor);
-            document.documentElement.style.setProperty('--button-color', buttonColor);
         }
 
         async function updateIdolConfig() {

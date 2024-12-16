@@ -149,7 +149,7 @@ def upload_file():
             output_path = os.path.join(user_audio, filename)
             audio.export(output_path, format='mp3')
             os.remove(temp_path)  # 刪除臨時文件
-            return jsonify({'message': '上傳成功'}), 200
+            return jsonify({'success': True, 'message': '上傳成功'}), 200
         except Exception as e:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -197,6 +197,19 @@ def recognize_audio():
             'error': f'找不到與 "{command}" 匹配的音檔'
         })
 
+@app.route('/get_commands')
+def get_commands():
+    user_id = get_user_id()
+    _, user_audio, _, _ = get_user_folders(user_id)
+    
+    audio_files = [os.path.splitext(f)[0] for f in os.listdir(user_audio) if f.endswith('.mp3')]
+    audio_files.sort()
+    
+    return jsonify({
+        'success': True,
+        'commands': audio_files
+    })
+
 @app.route('/play/<filename>')
 def play_audio(filename):
     user_id = get_user_id()
@@ -214,19 +227,6 @@ def play_audio(filename):
             return jsonify({'error': f'播放音檔時發生錯誤: {str(e)}'}), 500
     else:
         return jsonify({'error': f'找不到音檔: {filename}.mp3'}), 404
-
-@app.route('/get_commands')
-def get_commands():
-    user_id = get_user_id()
-    _, user_audio, _, _ = get_user_folders(user_id)
-    
-    audio_files = [os.path.splitext(f)[0] for f in os.listdir(user_audio) if f.endswith('.mp3')]
-    audio_files.sort()
-    
-    return jsonify({
-        'success': True,
-        'commands': audio_files
-    })
 
 @app.route('/upload_profile', methods=['POST'])
 def upload_profile():
