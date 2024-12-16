@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>偶像聊天機器人</title>
+    <style>
+        :root {
+            --theme-color: {{ theme_color }};
+            --secondary-color: {{ secondary_color }};
+            --button-color: {{ button_color }};
+        }
+        
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1, h3 {
+            color: var(--theme-color);
+            text-align: center;
+        }
+        .header-image {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            margin: 0 auto;
+            display: block;
+            object-fit: cover;
+            margin-bottom: 20px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            background-color: var(--button-color);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: opacity 0.3s;
+        }
+        button:hover {
+            opacity: 0.8;
+        }
+        #settingsPanel {
+            background-color: var(--secondary-color);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .hidden {
+            display: none;
+        }
+        .settings-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            background-color: var(--button-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .listening-text {
+            text-align: center;
+            color: var(--theme-color);
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+        .command-hint {
+            text-align: center;
+            color: #666;
+            margin: 10px 0;
+        }
+        #chatArea {
+            margin-top: 20px;
+        }
+        .profile-upload {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .profile-upload input[type="file"] {
+            display: none;
+        }
+        .config-section {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: var(--secondary-color);
+            border-radius: 5px;
+        }
+        .config-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .config-form input {
+            padding: 8px;
+            border: 1px solid #ffcce0;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .color-config {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            padding: 10px;
+        }
+        .color-picker {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .color-picker label {
+            flex: 1;
+            font-size: 14px;
+        }
+        .color-picker input[type="color"] {
+            padding: 0;
+            width: 50px;
+            height: 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #f8f9fa;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .tab.active {
+            background-color: var(--button-color);
+            color: white;
+        }
+        #chatStatus {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 1.2em;
+            color: var(--theme-color);
+            font-weight: bold;
+        }
+        .responses {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: var(--secondary-color);
+            border-radius: 5px;
+            display: none;
+        }
+        .response-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: white;
+            border: 1px solid #ffcce0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .response-item:hover {
+            background-color: #fff0f5;
+            transform: translateX(5px);
+        }
+        .response-item .controls {
+            display: flex;
+            gap: 5px;
+            margin: 0;
+        }
+        .hint {
+            color: #666;
+            font-size: 0.9em;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .upload-section {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: var(--secondary-color);
+            border-radius: 5px;
+            text-align: center;
+        }
+        .upload-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .upload-form input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ffcce0;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .upload-form input[type="file"] {
+            display: none;
+        }
+        .file-label {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .file-label:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button id="toggleSettings" class="settings-toggle">⚙️</button>
+        
+        <div id="settingsPanel" class="hidden">
+            <h3>設定你的偶像</h3>
+            <div class="profile-upload">
+                <input type="file" id="profileImage" accept="image/*" onchange="updateProfileImage(this)">
+                <label for="profileImage">
+                    <img src="{{ profile_image or 'https://via.placeholder.com/200?text=上傳偶像照片' }}" 
+                         alt="偶像頭像" 
+                         class="header-image" 
+                         style="cursor: pointer;"
+                         title="點擊更換頭像">
+                </label>
+            </div>
+            
+            <div class="config-section">
+                <h3>創建你的偶像聊天機器人</h3>
+                <div class="config-form">
+                    <input type="text" id="idolName" placeholder="請輸入偶像名字" value="{{ idol_name }}">
+                    <div class="color-config">
+                        <div class="color-picker">
+                            <label>主題顏色</label>
+                            <input type="color" id="themeColor" value="{{ theme_color }}" onchange="updateColors()">
+                        </div>
+                        <div class="color-picker">
+                            <label>背景顏色</label>
+                            <input type="color" id="secondaryColor" value="{{ secondary_color }}" onchange="updateColors()">
+                        </div>
+                        <div class="color-picker">
+                            <label>按鈕顏色</label>
+                            <input type="color" id="buttonColor" value="{{ button_color }}" onchange="updateColors()">
+                        </div>
+                    </div>
+                    <button onclick="updateIdolConfig()">保存設置</button>
+                </div>
+                <p class="hint">設置偶像名字和喜歡的顏色後，開始上傳語音來創建專屬的聊天回應！</p>
+            </div>
+        </div>
+
+        <div id="chatArea">
+            <img src="{{ profile_image if profile_image else 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=' }}" 
+                 alt="偶像頭像" 
+                 class="header-image" 
+                 id="displayedImage"
+                 onerror="this.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='">
+            
+            <h1 id="idolNameDisplay">{{ idol_name }} 聊天機器人</h1>
+            
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('chat')">聊天</button>
+                <button class="tab" onclick="showTab('upload')">上傳</button>
+            </div>
+
+            <div id="chatTab">
+                <div class="controls">
+                    <button id="startButton" onclick="startChat()">開始聊天</button>
+                    <button id="stopButton" disabled onclick="stopChat()">結束聊天</button>
+                </div>
+                
+                <div id="chatStatus"></div>
+                <div id="status"></div>
+
+                <div class="hint">
+                    試試說：「你好」、「我愛你」、「早安寶寶」等等...
+                </div>
+                
+                <div class="responses" id="responsesList">
+                    <h3>可以跟 {{ idol_name }} 說：</h3>
+                    <div id="responseList"></div>
+                </div>
+            </div>
+
+            <div id="uploadTab" style="display: none;">
+                <div class="upload-section">
+                    <h3>上傳新的回應</h3>
+                    <div class="upload-form">
+                        <input type="text" id="commandInput" placeholder="輸入指令名稱 (例如：你好)" required>
+                        <input type="file" id="audioFileInput" accept="audio/*" onchange="updateFileName()">
+                        <label for="audioFileInput" class="file-label" id="fileLabel">選擇音檔</label>
+                        <button onclick="uploadAudio()">上傳</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let recognition;
+        let isRecording = false;
+        const userId = '{{ user_id }}';
+
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'zh-TW';
+
+            recognition.onstart = function() {
+                isRecording = true;
+                document.getElementById('chatStatus').innerHTML = '{{ idol_name }} 寶寶正在聆聽...';
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+                document.getElementById('responsesList').style.display = 'block';
+                displayResponses();
+            };
+
+            recognition.onend = function() {
+                if (isRecording) {
+                    recognition.start();
+                }
+            };
+
+            recognition.onresult = function(event) {
+                const command = event.results[event.results.length - 1][0].transcript;
+                handleCommand(command);
+            };
+
+            recognition.onerror = function(event) {
+                console.error('Speech recognition error:', event.error);
+                updateStatus('語音辨識發生錯誤: ' + event.error, 'error');
+            };
+        }
+
+        function startChat() {
+            if (recognition) {
+                isRecording = true;
+                recognition.start();
+            } else {
+                updateStatus('你的瀏覽器不支持語音識別功能', 'error');
+            }
+        }
+
+        function stopChat() {
+            isRecording = false;
+            recognition.stop();
+            document.getElementById('chatStatus').innerHTML = '';
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+            document.getElementById('responsesList').style.display = 'none';
+        }
+
+        function handleCommand(command) {
+            console.log('Recognized command:', command);
+            fetch('/recognize', {
+                method: 'POST',
+                body: JSON.stringify({ command: command, user_id: userId }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    if (result.action === 'play') {
+                        playAudio(result.file_name);
+                    } else if (result.action === 'stop') {
+                        stopChat();
+                    }
+                } else {
+                    updateStatus(result.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                updateStatus('處理指令時發生錯誤', 'error');
+            });
+        }
+
+        function playAudio(command) {
+            fetch(`/play/${command}?user_id=${userId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const audio = new Audio(`data:audio/mp4;base64,${data.audio_data}`);
+                        audio.play();
+                    } else {
+                        updateStatus(data.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    updateStatus('播放音檔時發生錯誤', 'error');
+                });
+        }
+
+        function updateStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            if (tabName === 'chat') {
+                document.getElementById('chatTab').style.display = 'block';
+                document.getElementById('uploadTab').style.display = 'none';
+                document.querySelector('.tab:first-child').classList.add('active');
+            } else {
+                document.getElementById('chatTab').style.display = 'none';
+                document.getElementById('uploadTab').style.display = 'block';
+                document.querySelector('.tab:last-child').classList.add('active');
+                displayResponses();
+            }
+        }
+
+        function uploadAudio() {
+            const commandInput = document.getElementById('commandInput');
+            const fileInput = document.getElementById('audioFileInput');
+            const command = commandInput.value.trim();
+            const file = fileInput.files[0];
+
+            if (!command) {
+                updateStatus('請輸入指令名稱', 'error');
+                return;
+            }
+
+            if (!file) {
+                updateStatus('請選擇音檔', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('command', command);
+            formData.append('audio', file);
+            formData.append('user_id', userId);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    updateStatus(result.message, 'success');
+                    commandInput.value = '';
+                    fileInput.value = '';
+                    document.getElementById('fileLabel').textContent = '選擇音檔';
+                } else {
+                    updateStatus(result.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                updateStatus('上傳失敗', 'error');
+            });
+        }
+
+        function updateFileName() {
+            const fileInput = document.getElementById('audioFileInput');
+            const fileLabel = document.getElementById('fileLabel');
+            if (fileInput.files.length > 0) {
+                fileLabel.textContent = fileInput.files[0].name;
+            } else {
+                fileLabel.textContent = '選擇音檔';
+            }
+        }
+
+        function displayResponses() {
+            const responseList = document.getElementById('responseList');
+            fetch('/get_commands?user_id=' + userId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        responseList.innerHTML = '';
+                        data.commands.forEach(command => {
+                            const div = document.createElement('div');
+                            div.className = 'response-item';
+                            div.innerHTML = `
+                                <span>${command}</span>
+                                <div class="controls">
+                                    <button onclick="playAudio('${command}')" style="font-size: 0.8em; padding: 5px 10px;">
+                                        播放
+                                    </button>
+                                </div>
+                            `;
+                            responseList.appendChild(div);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        function updateColors() {
+            const themeColor = document.getElementById('themeColor').value;
+            const secondaryColor = document.getElementById('secondaryColor').value;
+            const buttonColor = document.getElementById('buttonColor').value;
+            
+            document.documentElement.style.setProperty('--theme-color', themeColor);
+            document.documentElement.style.setProperty('--secondary-color', secondaryColor);
+            document.documentElement.style.setProperty('--button-color', buttonColor);
+        }
+
+        async function updateIdolConfig() {
+            const idolName = document.getElementById('idolName').value;
+            const themeColor = document.getElementById('themeColor').value;
+            const secondaryColor = document.getElementById('secondaryColor').value;
+            const buttonColor = document.getElementById('buttonColor').value;
+            const profileImageInput = document.getElementById('profileImage');
+            
+            const formData = new FormData();
+            formData.append('idol_name', idolName);
+            formData.append('theme_color', themeColor);
+            formData.append('secondary_color', secondaryColor);
+            formData.append('button_color', buttonColor);
+            
+            // 如果有選擇新圖片，就加入到表單中
+            if (profileImageInput.files.length > 0) {
+                formData.append('profile_image', profileImageInput.files[0]);
+            }
+
+            try {
+                const response = await fetch('/update_config', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    // 更新所有顯示偶像名字的地方
+                    document.getElementById('idolNameDisplay').textContent = idolName + ' 聊天機器人';
+                    
+                    // 如果返回了新的圖片URL，更新圖片
+                    const data = await response.json();
+                    if (data.profile_image) {
+                        document.getElementById('displayedImage').src = data.profile_image;
+                    }
+                    
+                    // 關閉設置面板
+                    document.getElementById('settingsPanel').classList.add('hidden');
+                    updateColors();
+                    updateStatus('設置已更新', 'success');
+                } else {
+                    updateStatus('更新設置失敗', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                updateStatus('更新設置時發生錯誤', 'error');
+            }
+        }
+
+        function updateProfileImage(input) {
+            if (input.files && input.files[0]) {
+                const formData = new FormData();
+                formData.append('profile', input.files[0]);
+
+                fetch('/upload_profile', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success) {
+                        // 更新頭像顯示
+                        document.querySelector('.header-image').src = result.image_url + '?t=' + new Date().getTime();
+                        updateStatus('頭像更新成功！', 'success');
+                    } else {
+                        updateStatus(result.error, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    updateStatus('上傳頭像時發生錯誤', 'error');
+                });
+            }
+        }
+
+        // 切換設置面板
+        document.getElementById('toggleSettings').addEventListener('click', function() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('hidden');
+        });
+    </script>
+</body>
+</html>
