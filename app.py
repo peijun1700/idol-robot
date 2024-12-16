@@ -129,81 +129,104 @@ def upload_file():
     user_id = get_user_id()
     user_upload, user_audio, _, _ = get_user_folders(user_id)
     
-    if 'file' not in request.files:
+    if 'audio' not in request.files:
         return jsonify({'error': '沒有文件'}), 400
     
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': '沒有選擇文件'}), 400
+    file = request.files['audio']
+    command = request.form.get('command', '').strip()
+    
+    if file.filename == '' or not command:
+        return jsonify({'error': '沒有選擇文件或沒有指令名稱'}), 400
     
     if file and allowed_file(file.filename, {'mp3', 'wav', 'm4a'}):
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(user_upload, filename)
-        file.save(file_path)
+        filename = f"{command}.mp3"
+        temp_path = os.path.join(user_upload, secure_filename(file.filename))
+        file.save(temp_path)
         
-        # 轉換音頻格式
         try:
-            audio = AudioSegment.from_file(file_path)
-            output_path = os.path.join(user_audio, os.path.splitext(filename)[0] + '.mp3')
+            # 轉換音頻格式
+            audio = AudioSegment.from_file(temp_path)
+            output_path = os.path.join(user_audio, filename)
             audio.export(output_path, format='mp3')
-            os.remove(file_path)  # 刪除原始文件
+            os.remove(temp_path)  # 刪除臨時文件
             return jsonify({'message': '上傳成功'}), 200
         except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             return jsonify({'error': str(e)}), 500
     
     return jsonify({'error': '不支持的文件格式'}), 400
 
 @app.route('/recognize', methods=['POST'])
 def recognize_audio():
+    data = request.get_json()
+    if not data or 'command' not in data:
+        return jsonify({'error': '沒有收到指令'}), 400
+    
+    command = data['command'].lower()
     user_id = get_user_id()
     _, user_audio, _, _ = get_user_folders(user_id)
     
-    if 'file' not in request.files:
-        return jsonify({'error': '沒有文件'}), 400
-        
-    audio_file = request.files['file']
-    if audio_file.filename == '':
-        return jsonify({'error': '沒有選擇文件'}), 400
-        
-    if audio_file and allowed_file(audio_file.filename, {'wav'}):
-        filename = secure_filename(audio_file.filename)
-        temp_path = os.path.join(user_audio, 'temp_' + filename)
-        audio_file.save(temp_path)
-        
-        try:
-            with sr.AudioFile(temp_path) as source:
-                audio_data = recognizer.record(source)
-                text = recognizer.recognize_google(audio_data, language='zh-TW')
-                os.remove(temp_path)
-                return jsonify({'text': text}), 200
-        except Exception as e:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            return jsonify({'error': str(e)}), 500
-            
-    return jsonify({'error': '不支持的文件格式'}), 400
+    # 如果說"結束"，返回特殊標記
+    if "結束" in command:
+        return jsonify({
+            'success': True,
+            'command': command,
+            'action': 'stop'
+        })
+    
+    # 獲取用戶的音頻文件
+    audio_files = [os.path.splitext(f)[0] for f in os.listdir(user_audio) if f.endswith('.mp3')]
+    
+    # 直接匹配或模糊匹配
+    if command in audio_files:
+        file_name = command
+    else:
+        file_name = get_closest_match(command, audio_files)
+    
+    if file_name:
+        return jsonify({
+            'success': True,
+            'command': command,
+            'file_name': file_name,
+            'action': 'play'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': f'找不到與 "{command}" 匹配的音檔'
+        })
 
-@app.route('/commands', methods=['GET'])
+@app.route('/play/<filename>')
+def play_audio(filename):
+    user_id = get_user_id()
+    _, user_audio, _, _ = get_user_folders(user_id)
+    
+    file_path = os.path.join(user_audio, f"{filename}.mp3")
+    
+    if os.path.exists(file_path):
+        try:
+            with open(file_path, 'rb') as f:
+                audio_data = f.read()
+            audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+            return jsonify({'success': True, 'audio_data': audio_base64})
+        except Exception as e:
+            return jsonify({'error': f'播放音檔時發生錯誤: {str(e)}'}), 500
+    else:
+        return jsonify({'error': f'找不到音檔: {filename}.mp3'}), 404
+
+@app.route('/get_commands')
 def get_commands():
     user_id = get_user_id()
     _, user_audio, _, _ = get_user_folders(user_id)
     
-    command = request.args.get('command', '').lower()
-    if not command:
-        return jsonify({'error': '沒有提供命令'}), 400
-        
-    audio_files = [f for f in os.listdir(user_audio) if f.endswith('.mp3')]
-    if not audio_files:
-        return jsonify({'error': '沒有找到音頻文件'}), 404
-        
-    closest_match = get_closest_match(command, audio_files)
-    return jsonify({'file': closest_match}), 200
-
-@app.route('/audio/<path:filename>')
-def play_audio(filename):
-    user_id = get_user_id()
-    _, user_audio, _, _ = get_user_folders(user_id)
-    return send_from_directory(user_audio, filename)
+    audio_files = [os.path.splitext(f)[0] for f in os.listdir(user_audio) if f.endswith('.mp3')]
+    audio_files.sort()
+    
+    return jsonify({
+        'success': True,
+        'commands': audio_files
+    })
 
 @app.route('/upload_profile', methods=['POST'])
 def upload_profile():
