@@ -11,6 +11,7 @@ import logging
 import json
 from werkzeug.utils import secure_filename
 import uuid
+import subprocess
 
 # 設置日誌
 logging.basicConfig(level=logging.DEBUG)
@@ -50,7 +51,7 @@ def get_user_id():
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
 # 允許的文件類型
-ALLOWED_EXTENSIONS = {'m4a', 'mp3', 'wav'}
+ALLOWED_EXTENSIONS = {'m4a', 'mp3', 'wav', 'mp4', 'mov', 'avi', 'mkv', 'flv', 'webm', 'ogg', 'aac'}
 ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
 # 新增用戶配置類
@@ -138,22 +139,40 @@ def upload_file():
     if file.filename == '' or not command:
         return jsonify({'error': '沒有選擇文件或沒有指令名稱'}), 400
     
-    if file and allowed_file(file.filename, {'mp3', 'wav', 'm4a'}):
+    # 支持更多音頻和視頻格式
+    if file and allowed_file(file.filename, {'mp3', 'wav', 'm4a', 'mp4', 'mov', 'avi', 'mkv', 'flv', 'webm', 'ogg', 'aac'}):
         filename = f"{command}.mp3"
         temp_path = os.path.join(user_upload, secure_filename(file.filename))
         file.save(temp_path)
         
         try:
-            # 轉換音頻格式
-            audio = AudioSegment.from_file(temp_path)
+            # 使用 pydub 處理音頻
+            if file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.flv', '.webm')):
+                # 從視頻中提取音頻
+                subprocess.run(f'ffmpeg -i "{temp_path}" -vn -acodec pcm_s16le -ar 44100 -ac 2 "{temp_path}.wav"', shell=True)
+                audio = AudioSegment.from_wav(f"{temp_path}.wav")
+                os.remove(f"{temp_path}.wav")
+            else:
+                # 直接處理音頻文件
+                audio = AudioSegment.from_file(temp_path)
+            
+            # 標準化音量
+            normalized_audio = audio.normalize()
+            
+            # 轉換為 mp3 並保存
             output_path = os.path.join(user_audio, filename)
-            audio.export(output_path, format='mp3')
-            os.remove(temp_path)  # 刪除臨時文件
+            normalized_audio.export(output_path, format='mp3', parameters=["-q:a", "0"])
+            
+            # 清理臨時文件
+            os.remove(temp_path)
+            
             return jsonify({'success': True, 'message': '上傳成功'}), 200
+            
         except Exception as e:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-            return jsonify({'error': str(e)}), 500
+            print(f"Error processing audio: {str(e)}")
+            return jsonify({'error': '處理音頻時發生錯誤'}), 500
     
     return jsonify({'error': '不支持的文件格式'}), 400
 
